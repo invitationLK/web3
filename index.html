@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Make a Wish! 🎂</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,500,400&f[]=playfair-display@700,400italic&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-dark: #0c0a09;
+            --cake-icing: #fdf2f8; /* pink-50 */
+            --cake-sponge: #fbcfe8; /* pink-200 */
+            --flame-warm: #fbbf24; /* amber-400 */
+            --flame-core: #fff;
+            --secondary: #ec4899; /* pink-500 */
+        }
+
+        body {
+            font-family: 'Satoshi', sans-serif;
+            background-color: var(--bg-dark);
+            color: #f9fafb;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        .font-serif { font-family: 'Playfair Display', serif; }
+
+        /* --- Scene Management --- */
+        #scene-container {
+            position: relative;
+            width: 100vw; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden;
+        }
+
+        .scene {
+            position: absolute;
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.8s ease-in-out;
+            padding: 2rem;
+        }
+
+        .scene.active { opacity: 1; pointer-events: all; }
+
+        /* --- STEP 1: Interactive Cake & Candles --- */
+        #cake-scene { background: radial-gradient(circle at center, #1c1917 0%, #0c0a09 100%); }
+
+        .cake-container { position: relative; width: 300px; height: 250px; margin-top: 4rem; }
+
+        /* Cake Body (CSS 3D structure) */
+        .cake-body {
+            position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 250px; height: 120px;
+            background-color: var(--cake-sponge);
+            border-radius: 125px / 60px; /* Elliptical for perspective */
+            box-shadow: 0 10px 0 #f9a8d4, 0 15px 30px rgba(0,0,0,0.5);
+        }
+        .cake-body::before { /* Icing Top */
+            content: ''; position: absolute; top: -15px; left: 0;
+            width: 250px; height: 125px;
+            background-color: var(--cake-icing);
+            border-radius: 50%;
+            box-shadow: inset 0 -5px 10px rgba(0,0,0,0.1);
+        }
+
+        /* Candles */
+        .candles-arch {
+            position: absolute; top: 0; left: 50%;
+            transform: translateX(-50%);
+            width: 200px; height: 100px;
+            display: flex; justify-content: space-between; align-items: flex-end;
+        }
+
+        .candle-wrapper { position: relative; height: 80px; width: 20px; cursor: pointer; }
+
+        .candle-stick {
+            position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 12px; height: 60px;
+            background: linear-gradient(to right, #ec4899, #f472b6);
+            border-radius: 6px;
+        }
+
+        .wick {
+            position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+            width: 2px; height: 10px; background-color: #444;
+        }
+
+        /* Flames */
+        .flame {
+            position: absolute; top: -25px; left: 50%;
+            transform: translateX(-50%) scale(1);
+            width: 16px; height: 26px;
+            background-color: var(--flame-warm);
+            border-radius: 50% 50% 20% 20%;
+            box-shadow: 0 0 20px var(--flame-warm), 0 0 40px var(--flame-warm);
+            animation: flicker 0.1s infinite alternate;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .flame::after { /* Flame Core */
+            content: ''; position: absolute; bottom: 4px; left: 50%;
+            transform: translateX(-50%);
+            width: 8px; height: 12px;
+            background-color: var(--flame-core);
+            border-radius: 50%; opacity: 0.8;
+        }
+
+        @keyframes flicker {
+            0% { transform: translateX(-50%) scale(1) rotate(-1deg); }
+            100% { transform: translateX(-50%) scale(1.05) rotate(1deg); }
+        }
+
+        /* Extinguished state */
+        .candle-wrapper.extinguished .flame { transform: translateX(-50%) scale(0); opacity: 0; }
+        
+        .smoke {
+            position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+            width: 10px; height: 10px; background-color: rgba(255,255,255,0.6);
+            border-radius: 50%; opacity: 0; pointer-events: none;
+        }
+
+        /* --- STEP 2: Wishes & Auto-Scrolling Photos --- */
+        #wishes-scene { background: linear-gradient(135deg, #1c1917 0%, #0c0a09 100%); }
+
+        .photo-scroller {
+            width: 100%; max-width: 600px;
+            height: 350px; /* Portrait Resolution overall */
+            overflow: hidden; position: relative;
+            margin-top: 2rem; margin-bottom: 2rem;
+            border-radius: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .photo-strip {
+            display: flex; gap: 1rem; position: absolute; left: 0;
+            height: 100%; align-items: center;
+            padding: 0 1rem;
+        }
+
+        .portrait-photo {
+            width: 220px; height: 310px; /* portrait aspect */
+            object-fit: cover; border-radius: 1rem;
+            flex-shrink: 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 2px solid rgba(255,255,255,0.05);
+        }
+
+        /* --- STEP 3: Invitation --- */
+        #invitation-scene { background-color: #0c0a09; }
+
+        .invite-card {
+            background: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(251, 191, 36, 0.3); /* Gold border */
+            padding: 2.5rem; border-radius: 2rem;
+            width: 95%; max-width: 400px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+            position: relative; overflow: hidden;
+            transform: translateY(30px); opacity: 0;
+        }
+        
+        /* Subtle invitation decorative glow */
+        .invite-card::before {
+            content: ''; position: absolute; -inset: 1px;
+            background: radial-gradient(circle at top right, rgba(251, 191, 36, 0.15), transparent 60%);
+            border-radius: 2rem; pointer-events: none;
+        }
+
+        /* Utility */
+        .text-gradient {
+            background: linear-gradient(90deg, #f9a8d4, #f472b6, #fff);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        
+        .btn-primary {
+            background-image: linear-gradient(90deg, #ec4899, #f43f5e);
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.4);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 30px rgba(236, 72, 153, 0.6); }
+
+    </style>
+</head>
+<body>
+
+    <div id="scene-container">
+        
+        <section id="cake-scene" class="scene active">
+            <div class="text-center z-10">
+                <h1 class="text-gradient font-serif text-5xl font-bold mb-4">Make a Wish</h1>
+                <p id="instruction-text" class="text-gray-400 text-lg">Click each candle to extinguish the flame...</p>
+            </div>
+
+            <div class="cake-container">
+                <div class="candles-arch">
+                    <div class="candle-wrapper" onclick="extinguish(this)">
+                        <div class="flame"></div>
+                        <div class="smoke"></div>
+                        <div class="wick"></div>
+                        <div class="candle-stick"></div>
+                    </div>
+                    <div class="candle-wrapper" onclick="extinguish(this)">
+                        <div class="flame"></div>
+                        <div class="smoke"></div>
+                        <div class="wick"></div>
+                        <div class="candle-stick"></div>
+                    </div>
+                    <div class="candle-wrapper" onclick="extinguish(this)">
+                        <div class="flame"></div>
+                        <div class="smoke"></div>
+                        <div class="wick"></div>
+                        <div class="candle-stick"></div>
+                    </div>
+                    <div class="candle-wrapper" onclick="extinguish(this)">
+                        <div class="flame"></div>
+                        <div class="smoke"></div>
+                        <div class="wick"></div>
+                        <div class="candle-stick"></div>
+                    </div>
+                    <div class="candle-wrapper" onclick="extinguish(this)">
+                        <div class="flame"></div>
+                        <div class="smoke"></div>
+                        <div class="wick"></div>
+                        <div class="candle-stick"></div>
+                    </div>
+                </div>
+                <div class="cake-body"></div>
+            </div>
+        </section>
+
+        <section id="wishes-scene" class="scene">
+            <div class="text-center w-full max-w-2xl">
+                <p class="text-pink-300 font-serif italic text-2xl mb-2">My Dear Handsome,</p>
+                <h2 class="text-gradient text-5xl font-bold mb-8">Happy Birthday!</h2>
+                
+                <div class="space-y-5 text-gray-200 text-base leading-relaxed max-w-lg mx-auto">
+                    <p>To the man who makes my heart skip a beat. You are the best unplanned thing that happened in my life, and I cherish every moment with you ❤️.</p>
+                    <div class="w-12 h-px bg-white/10 mx-auto"></div>
+                    <p>Stay focused on your big goals babe; I'm right behind you, cheering you on and praying for your success every single day.</p>
+                    <p class="text-gradient font-bold text-xl">I love you so much 💋</p>
+                </div>
+
+                <div class="photo-scroller">
+                    <div id="photo-strip" class="photo-strip">
+                        </div>
+                </div>
+
+                <button onclick="goToScene(3)" class="btn-primary text-white py-3 px-10 rounded-full font-bold mt-4">One final surprise...</button>
+            </div>
+        </section>
+
+        <section id="invitation-scene" class="scene">
+            <div class="invite-card text-center">
+                <h3 class="text-white text-3xl font-serif mb-1">An Exclusive</h3>
+                <h2 class="text-pink-400 text-4xl font-serif font-bold italic mb-6">Birthday Invitation</h2>
+                
+                <div class="w-20 h-px bg-amber-400/30 mx-auto mb-8"></div>
+                
+                <div class="space-y-6 mb-10 text-gray-200">
+                    <div class="flex flex-col">
+                        <span class="text-amber-400 text-[10px] uppercase tracking-[0.3em] font-bold">Event</span>
+                        <span class="text-xl text-white font-medium">Birthday High Tea</span>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
+                        <div class="flex flex-col border-r border-white/10">
+                            <span class="text-gray-400 text-[10px] uppercase tracking-widest">Date</span>
+                            <span class="text-lg text-white font-bold">Dec 28, 2026</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-gray-400 text-[10px] uppercase tracking-widest">Location</span>
+                            <span class="text-lg text-white font-bold">Jetwing Colombo 7</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <p class="text-pink-300 font-serif italic text-lg border-t border-white/10 pt-6">"Let's make this day unforgettable."</p>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // CRUCIAL: Replace these URLs with direct links to your portrait photos
+        const myPhotos = [
+            "https://i.postimg.cc/sDz53h1K/images-(5).jpg",
+            "https://i.postimg.cc/rFd2FKbD/images-(3).jpg",
+            "https://i.postimg.cc/ydf27HyB/images-(4).jpg",
+            "https://i.postimg.cc/L4G2Ptjf/images-(6).jpg"
+        ];
+
+        // --- STATE MANAGEMENT ---
+        let extinguishedCount = 0;
+        const totalCandles = 5;
+
+        // --- STEP 1: CAKE INTERACTION ---
+        function extinguish(candleWrapper) {
+            // Don't do anything if already extinguished
+            if (candleWrapper.classList.contains('extinguished')) return;
+
+            // Add class to trigger CSS transition
+            candleWrapper.classList.add('extinguished');
+            extinguishedCount++;
+
+            // Smoke puff animation
+            const smoke = candleWrapper.querySelector('.smoke');
+            gsap.fromTo(smoke, 
+                { opacity: 1, y: 0, scale: 1 }, 
+                { opacity: 0, y: -40, scale: 3, duration: 1.5, ease: "power2.out" }
+            );
+
+            // Play soft puff sound if desired (requires audio file)
+            // new Audio('puff.mp3').play();
+
+            // Check if all are out
+            if (extinguishedCount === totalCandles) {
+                endCakeScene();
+            }
+        }
+
+        function endCakeScene() {
+            document.getElementById('instruction-text').innerText = "Wish made! The smoke is clearing...";
+            
+            // Short delay, then transition
+            setTimeout(() => {
+                goToScene(2);
+                // Trigger celebratory confetti
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#ec4899', '#fdf2f8', '#fbbf24'] });
+            }, 2000);
+        }
+
+        // --- STEP 2: SCROLLER LOGIC ---
+        function initPhotoScroller() {
+            const strip = document.getElementById('photo-strip');
+            if (!strip) return;
+
+            // Duplicate photo content multiple times for seamless infinite effect
+            const content = myPhotos.map(src => `<img src="${src}" class="portrait-photo" alt="Memory">`).join('');
+            strip.innerHTML = content + content + content; // Triple content
+
+            // Calculate width for the GSAP animation (width of one content set)
+            // We use a small timeout to ensure images are loading and width is calculated
+            setTimeout(() => {
+                const totalWidth = strip.scrollWidth;
+                const singleSetWidth = totalWidth / 3;
+
+                // GSAP Infinite Horizontal Scroll (Right to Left)
+                gsap.to(strip, {
+                    x: `-${singleSetWidth}px`,
+                    duration: 20, // Adjust speed here (higher = slower)
+                    ease: "none",
+                    repeat: -1,
+                    overwrite: true // Prevent animation stacking
+                });
+            }, 300);
+        }
+
+        // --- STEP 3: INVITATION ANIMATION ---
+        function animateInvitation() {
+            gsap.to(".invite-card", {
+                opacity: 1,
+                y: 0,
+                duration: 1.2,
+                ease: "power4.out",
+                delay: 0.5
+            });
+        }
+
+        // --- SCENE NAVIGATION ---
+        function goToScene(sceneNumber) {
+            // Deactivate current
+            const currentScene = document.querySelector('.scene.active');
+            if (currentScene) currentScene.classList.remove('active');
+
+            // Activate new
+            let sceneId;
+            switch(sceneNumber) {
+                case 1: sceneId = 'cake-scene'; break;
+                case 2: sceneId = 'wishes-scene'; initPhotoScroller(); break;
+                case 3: sceneId = 'invitation-scene'; animateInvitation(); break;
+            }
+            document.getElementById(sceneId).classList.add('active');
+        }
+
+        // --- INITIALIZATION ---
+        // Ensure scene 1 is active on load
+        window.onload = () => goToScene(1);
+
+    </script>
+</body>
+</html>
